@@ -53,6 +53,17 @@ def extract_intent_and_entities(state: AdvisoryState) -> Dict[str, Any]:
                 extracted_location = loc.title()
                 break
 
+    # Direct short location input (e.g. user answering location prompt with "Mainpuri" or "New Delhi")
+    if not extracted_location:
+        cleaned_input = re.sub(r'^(?:it is|it\'s|its|city is|in|at|for|near)\s+', '', user_input.strip(), flags=re.I).strip('.?!, ')
+        words = cleaned_input.split()
+        is_short_location = (
+            1 <= len(words) <= 3 and
+            not any(w.lower() in ["is", "can", "should", "what", "how", "why", "who", "where", "today", "tomorrow", "tonight", "safe", "cycling", "running", "picnic", "drive", "travel", "yes", "no"] for w in words)
+        )
+        if is_short_location and cleaned_input.lower() not in stopwords:
+            extracted_location = cleaned_input.title()
+
     is_new_location = bool(extracted_location)
     final_location = extracted_location or state.get("location_name")
 
@@ -167,7 +178,8 @@ def resolve_and_fetch_weather(state: AdvisoryState) -> Dict[str, Any]:
         return {
             "location_resolved": (stage != "geocoding"),
             "weather_fetched": False,
-            "weather_error": err_msg
+            "weather_error": err_msg,
+            "weather_data": None
         }
 
     loc_info = weather_result.get("location", {})
