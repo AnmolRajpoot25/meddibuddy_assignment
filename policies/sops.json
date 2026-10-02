@@ -1,0 +1,359 @@
+[
+  {
+    "id": "SOP-001",
+    "title": "Severe Low-Pressure / Monsoon Depressions & Squally Winds",
+    "category": "extreme_systems",
+    "severity": "CRITICAL",
+    "severity_rank": 4,
+    "applicable_activities": [
+      "all",
+      "outdoor",
+      "cycling",
+      "running",
+      "walking",
+      "travel",
+      "commute",
+      "picnic",
+      "sports"
+    ],
+    "condition_type": "threshold_or_system",
+    "triggers": {
+      "precipitation_mm_gte": 15.0,
+      "precipitation_probability_gte": 80,
+      "wind_speed_kmh_gte": 45.0,
+      "wind_gusts_kmh_gte": 55.0,
+      "system_flags": [
+        "low_pressure",
+        "cyclonic_circulation",
+        "monsoon_depression",
+        "imd_alert"
+      ]
+    },
+    "guidance": "A well-marked low-pressure weather system or intense squally wind pattern is active. Treat all outdoor activities as high severity. Suspend all non-essential outdoor travel and exercise immediately due to flash waterlogging, squalls, and flying debris hazard.",
+    "recommended_actions": [
+      "Avoid all non-essential outdoor activities immediately.",
+      "Seek indoor shelter away from loose structures and power lines.",
+      "Monitor official India Meteorological Department (IMD) or local emergency warnings."
+    ],
+    "rationale": "Severe rain and squall systems present life-safety hazards from localized flooding, uprooted trees, and microbursts regardless of specific activity."
+  },
+  {
+    "id": "SOP-002",
+    "title": "Severe Thunderstorm & Convective Downpour",
+    "category": "extreme_systems",
+    "severity": "CRITICAL",
+    "severity_rank": 4,
+    "applicable_activities": [
+      "all",
+      "exercise",
+      "sports",
+      "picnic",
+      "park",
+      "hiking",
+      "cycling"
+    ],
+    "condition_type": "numeric",
+    "triggers": {
+      "precipitation_mm_gte": 10.0,
+      "wind_gusts_kmh_gte": 45.0,
+      "weather_codes": [
+        95,
+        96,
+        99
+      ]
+    },
+    "guidance": "Active thunderstorm conditions detected with convective downpours. Lightning strikes, localized pooling, and violent gusts make outdoor exposure hazardous. Cease outdoor activities and seek fully enclosed shelter.",
+    "recommended_actions": [
+      "Immediately move indoors or into an enclosed metal vehicle.",
+      "Avoid tall isolated trees, open fields, and bodies of water.",
+      "Wait at least 30 minutes after the last thunderclap before resuming outdoor plans."
+    ],
+    "rationale": "Direct lightning danger and sudden gust fronts exceed safe thresholds for open-air human presence."
+  },
+  {
+    "id": "SOP-003",
+    "title": "High Wind Hazard for Cycling and Two-Wheelers",
+    "category": "exercise_and_sports",
+    "severity": "WARNING",
+    "severity_rank": 3,
+    "applicable_activities": [
+      "cycling",
+      "bike",
+      "biking",
+      "two-wheeler",
+      "scooter",
+      "motorcycle",
+      "commute by bike"
+    ],
+    "condition_type": "numeric",
+    "triggers": {
+      "wind_speed_kmh_gte": 40.0,
+      "wind_gusts_kmh_gte": 50.0
+    },
+    "guidance": "Sustained winds exceeding 40 km/h or gusts exceeding 50 km/h present severe vehicle instability and crosswind drift risks for cyclists and two-wheeler riders. This is an active safety hazard, not merely a comfort issue. Advise against cycling or riding.",
+    "recommended_actions": [
+      "Postpone cycling or two-wheeler travel until sustained winds fall below 30 km/h.",
+      "If transit is unavoidable, utilize four-wheeled sheltered transport.",
+      "Stay vigilant for sudden crosswinds near tall buildings, bridges, and open flyovers."
+    ],
+    "rationale": "Aerodynamic crosswinds compromise balance and cornering control for lightweight two-wheeled vehicles."
+  },
+  {
+    "id": "SOP-004",
+    "title": "Extreme Heat Index for Vigorous Cardio & Running",
+    "category": "exercise_and_sports",
+    "severity": "WARNING",
+    "severity_rank": 3,
+    "applicable_activities": [
+      "running",
+      "jogging",
+      "cardio",
+      "cycling",
+      "marathon",
+      "football",
+      "basketball",
+      "workout"
+    ],
+    "condition_type": "numeric",
+    "triggers": {
+      "apparent_temperature_c_gte": 38.0
+    },
+    "guidance": "The apparent temperature (Heat Index) is 38\u00b0C or higher. Vigorous outdoor cardiovascular exercise carries elevated risks of heat exhaustion and heat stroke due to impaired evaporative cooling. Suspend strenuous outdoor training.",
+    "recommended_actions": [
+      "Reschedule rigorous training to early dawn or shift to an air-conditioned indoor facility.",
+      "Maintain aggressive electrolyte and fluid hydration.",
+      "Discontinue activity immediately if experiencing dizziness, cramps, nausea, or headache."
+    ],
+    "rationale": "High wet-bulb/apparent temperatures drastically impair thermoregulation during heavy exertion."
+  },
+  {
+    "id": "SOP-005",
+    "title": "High UV Radiation Midday Exercise Advisory",
+    "category": "exercise_and_sports",
+    "severity": "CAUTION",
+    "severity_rank": 2,
+    "applicable_activities": [
+      "exercise",
+      "running",
+      "jogging",
+      "walking",
+      "outdoor fitness",
+      "swimming",
+      "tennis"
+    ],
+    "condition_type": "numeric",
+    "triggers": {
+      "uv_index_gte": 8.0
+    },
+    "guidance": "The UV Index is at Very High / Extreme levels (8.0 or above). Unprotected skin exposure carries rapid erythema (sunburn) and cellular damage risks between 11:00 AM and 4:00 PM. Advise against unprotected midday workouts and recommend rescheduling to early morning or evening.",
+    "recommended_actions": [
+      "Shift direct-sun workouts to before 10:00 AM or after 4:30 PM.",
+      "Apply broad-spectrum SPF 50+ sunscreen, wear UV-rated eyewear, and wear light UPF clothing.",
+      "Seek shaded tracks or paths whenever possible."
+    ],
+    "rationale": "High solar UV irradiance causes rapid photochemical skin damage and accelerates dehydration."
+  },
+  {
+    "id": "SOP-006",
+    "title": "Heat & Sun Vulnerability for Toddlers and Elderly",
+    "category": "vulnerable_groups",
+    "severity": "WARNING",
+    "severity_rank": 3,
+    "applicable_activities": [
+      "park",
+      "playground",
+      "walking",
+      "outing",
+      "picnic",
+      "kids",
+      "children",
+      "elderly",
+      "infants"
+    ],
+    "condition_type": "numeric",
+    "triggers": {
+      "temperature_c_gte": 34.0,
+      "uv_index_gte": 6.0
+    },
+    "guidance": "Ambient temperatures exceed 34\u00b0C combined with high solar intensity. Young children, toddlers, and elderly individuals possess reduced thermoregulatory capacity and dehydrate significantly faster. Advise keeping vulnerable dependents indoors in cool environments.",
+    "recommended_actions": [
+      "Keep children away from metal playground equipment which can cause contact burns.",
+      "Limit elderly family members to temperature-controlled indoor spaces.",
+      "Ensure frequent sips of cool water and loose, breathable cotton clothing."
+    ],
+    "rationale": "Vulnerable physiology exhibits slower heat dissipation and higher susceptibility to rapid hyperthermia."
+  },
+  {
+    "id": "SOP-007",
+    "title": "Cold Stress & Hypothermia Risk for Vulnerable Populations",
+    "category": "vulnerable_groups",
+    "severity": "CAUTION",
+    "severity_rank": 2,
+    "applicable_activities": [
+      "park",
+      "walking",
+      "outdoor",
+      "kids",
+      "children",
+      "elderly",
+      "stroll"
+    ],
+    "condition_type": "numeric",
+    "triggers": {
+      "apparent_temperature_c_lte": 8.0
+    },
+    "guidance": "The apparent temperature is at or below 8\u00b0C. Wind chill accelerates convective heat loss, posing hypothermia and respiratory constriction risks for the elderly and young children. Extended park or playground exposure is inadvisable.",
+    "recommended_actions": [
+      "Dress in multiple insulating layers with wind-resistant outer shell.",
+      "Cover extremities (head, ears, hands) to prevent peripheral vasoconstriction.",
+      "Limit continuous outdoor exposure to under 30 minutes for young children and seniors."
+    ],
+    "rationale": "Rapid core body temperature drops can trigger cardiovascular stress in seniors and hypothermia in children."
+  },
+  {
+    "id": "SOP-008",
+    "title": "Hot Pavement & Heat Stress Risk for Pets and Dogs",
+    "category": "vulnerable_groups",
+    "severity": "CAUTION",
+    "severity_rank": 2,
+    "applicable_activities": [
+      "dog walking",
+      "pet walk",
+      "dog",
+      "pets",
+      "puppy",
+      "canine"
+    ],
+    "condition_type": "numeric",
+    "triggers": {
+      "temperature_c_gte": 30.0
+    },
+    "guidance": "Ambient temperature reaches 30\u00b0C or higher under direct sunshine. Asphalt and dark road surfaces absorb solar radiation, frequently reaching 50\u00b0C-60\u00b0C, causing severe thermal paw burns within 60 seconds. In addition, dogs cannot sweat and risk rapid heatstroke.",
+    "recommended_actions": [
+      "Execute the '7-Second Test': touch the pavement with the back of your hand; if too hot to hold for 7 seconds, it is too hot for paw pads.",
+      "Walk dogs on grassy terrain during cooler sunrise or post-sunset hours.",
+      "Carry fresh water and look out for heavy panting, drooling, or lethargy."
+    ],
+    "rationale": "Radiant heat from dark pavement causes third-degree paw burns; dogs rely only on panting for cooling."
+  },
+  {
+    "id": "SOP-009",
+    "title": "High Precipitation Probability & Road Travel Delay Advisory",
+    "category": "travel_and_commute",
+    "severity": "WARNING",
+    "severity_rank": 3,
+    "applicable_activities": [
+      "travel",
+      "commute",
+      "driving",
+      "road trip",
+      "highway",
+      "bus",
+      "car"
+    ],
+    "condition_type": "numeric",
+    "triggers": {
+      "precipitation_probability_gte": 70,
+      "precipitation_mm_gte": 3.0
+    },
+    "guidance": "High precipitation probability (>= 70%) with active rain accumulation. Wet roadways significantly degrade tire traction, increase braking distance by up to 2x, and create aquaplaning and localized waterlogging delays. Advise warning of travel delays and checking live route alerts before departure.",
+    "recommended_actions": [
+      "Allow at least 25-40% extra travel time for highway and urban commutes.",
+      "Double your following distance behind the vehicle ahead.",
+      "Verify wiper blade condition and headlights before departure; avoid standing water on road shoulders."
+    ],
+    "rationale": "Hydroplaning and reduced stopping distance spike road collision rates in active rain."
+  },
+  {
+    "id": "SOP-010",
+    "title": "Dense Mist / Poor Visibility Travel Advisory",
+    "category": "travel_and_commute",
+    "severity": "CAUTION",
+    "severity_rank": 2,
+    "applicable_activities": [
+      "travel",
+      "commute",
+      "driving",
+      "highway",
+      "morning commute",
+      "fog"
+    ],
+    "condition_type": "numeric",
+    "triggers": {
+      "relative_humidity_gte": 92,
+      "wind_speed_kmh_lte": 8.0,
+      "weather_codes": [
+        45,
+        48
+      ]
+    },
+    "guidance": "High relative humidity combined with calm surface winds promotes dense fog and mist formation, severely curtailing forward sight distance on roads. Advise reduced speeds and defensive driving.",
+    "recommended_actions": [
+      "Utilize low-beam headlights or dedicated fog lamps; avoid high beams which reflect glare.",
+      "Follow road edge markings and reduce speed to match safe stopping distance.",
+      "Avoid overtaking on undivided highways."
+    ],
+    "rationale": "Impaired visual contrast and perception latency are the primary cause of highway chain collisions."
+  },
+  {
+    "id": "SOP-011",
+    "title": "Favorable Conditions for Outdoor Leisure and Picnics",
+    "category": "leisure_and_events",
+    "severity": "ADVISORY",
+    "severity_rank": 1,
+    "applicable_activities": [
+      "picnic",
+      "park",
+      "outing",
+      "barbecue",
+      "bbq",
+      "garden party",
+      "leisure stroll",
+      "outdoor gathering"
+    ],
+    "condition_type": "fuzzy",
+    "triggers": {
+      "temperature_c_min": 18.0,
+      "temperature_c_max": 28.5,
+      "precipitation_mm_lte": 0.2,
+      "precipitation_probability_lte": 25,
+      "wind_speed_kmh_lte": 22.0,
+      "uv_index_lte": 7.0
+    },
+    "guidance": "Weather conditions are comfortable and well-suited for outdoor leisure activities such as picnics, park outings, and gatherings. Mild thermal comfort, calm breezes, and dry conditions ensure low environmental disruption.",
+    "recommended_actions": [
+      "Excellent window for outdoor picnics and recreation.",
+      "Carry light sun protection (sunglasses or hat) during peak sunlight hours.",
+      "Maintain tidy trash disposal to protect natural park surroundings."
+    ],
+    "rationale": "Combined thermal, wind, and moisture metrics align with the optimal human comfort envelope."
+  },
+  {
+    "id": "SOP-012",
+    "title": "Muggy Overcast & Humid Discomfort for Social Outings",
+    "category": "leisure_and_events",
+    "severity": "ADVISORY",
+    "severity_rank": 1,
+    "applicable_activities": [
+      "picnic",
+      "park",
+      "outing",
+      "lawn party",
+      "outdoor gathering",
+      "leisure"
+    ],
+    "condition_type": "fuzzy",
+    "triggers": {
+      "relative_humidity_gte": 85,
+      "temperature_c_gte": 29.0,
+      "precipitation_mm_lte": 2.0
+    },
+    "guidance": "While precipitation may be light or absent, high relative humidity (>= 85%) paired with warm temperatures produces muggy, sticky, and uncomfortable ambient conditions. Not life-threatening, but outdoor dining and picnics will feel oppressive with sluggish air circulation.",
+    "recommended_actions": [
+      "Consider semi-sheltered, well-ventilated or shaded spots with natural air breeze.",
+      "Bring portable misting fans and chilled beverages for guest comfort.",
+      "Keep food covered to protect from humidity and increased insect activity."
+    ],
+    "rationale": "High latent heat and humidity inhibit perspiration evaporation, generating significant physical discomfort without meeting storm thresholds."
+  }
+]
