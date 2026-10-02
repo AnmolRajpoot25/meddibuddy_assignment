@@ -174,27 +174,19 @@ class SOPEngine:
         self,
         clause: Dict[str, Any],
         weather: Dict[str, Any],
-        query_text: str
+        query_text: str = ""
     ) -> Tuple[bool, List[str]]:
-        """Evaluates an individual condition clause containing triggers and optional system flags."""
+        """
+        Evaluates an individual condition clause containing triggers.
+        Uses verified weather telemetry only; never treats user query text as weather evidence.
+        """
         triggers = clause.get("triggers", {})
-        system_flags = clause.get("system_flags", [])
         logic = clause.get("condition_logic", "all").lower()
 
         reasons = []
         clause_results = []
 
-        # System / context keywords
-        if system_flags:
-            norm_q = (query_text or "").lower()
-            flags_matched = [f for f in system_flags if f.lower() in norm_q]
-            if flags_matched:
-                clause_results.append(True)
-                reasons.append(f"Contextual system alert flags active: {', '.join(flags_matched)}")
-            else:
-                clause_results.append(False)
-
-        # Trigger metrics
+        # Trigger metrics evaluated strictly against verified meteorological observations
         for t_key, t_thresh in triggers.items():
             pass_single, reason_str = self._evaluate_single_trigger(t_key, t_thresh, weather)
             clause_results.append(pass_single)

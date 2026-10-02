@@ -102,6 +102,42 @@ class TelemetryValidator:
         return values
 
     @staticmethod
+    def _matches_formatting_tolerance(cited: float, verified: float) -> bool:
+        """
+        Formatting-level tolerance only:
+        - Exact float match (abs diff < 0.05)
+        - Integer rounding match if cited without decimal (e.g. 23 vs 23.0 or 23 vs 22.6, abs diff <= 0.5)
+        Eliminates wide numerical drift margins.
+        """
+        if abs(cited - verified) < 0.05:
+            return True
+        if cited == round(cited) and abs(cited - verified) <= 0.5:
+            return True
+        return False
+
+    @staticmethod
+    def format_verified_telemetry_block(location_name: str, weather: Dict[str, Any]) -> str:
+        """Application-generated verified telemetry block. Preferred over LLM generation."""
+        temp = weather.get("temperature_2m", "N/A")
+        app_temp = weather.get("apparent_temperature", temp)
+        wind = weather.get("wind_speed_10m", "N/A")
+        gusts = weather.get("wind_gusts_10m", wind)
+        precip = weather.get("precipitation", "N/A")
+        precip_prob = weather.get("precipitation_probability", "N/A")
+        rh = weather.get("relative_humidity_2m", "N/A")
+        uv = weather.get("uv_index", "N/A")
+        obs_time = weather.get("time", "Current")
+
+        return (
+            f"**Verified Meteorological Observations ({location_name}, {obs_time}):**\n"
+            f"- Temperature: {temp}°C (Apparent: {app_temp}°C)\n"
+            f"- Precipitation: {precip} mm (Probability: {precip_prob}%)\n"
+            f"- Wind Speed: {wind} km/h (Gusts: {gusts} km/h)\n"
+            f"- Relative Humidity: {rh}%\n"
+            f"- UV Index: {uv}"
+        )
+
+    @staticmethod
     def validate(
         response_text: str,
         weather: Dict[str, Any],
@@ -136,13 +172,11 @@ class TelemetryValidator:
                     f"(not in sops.json and not in approved response set)"
                 )
 
-        # ── 3. Telemetry number grounding ─────────────────────────────────────
-        # Collect all numeric policy threshold values — these are exempt from validation
-        # because the LLM is allowed to quote the policy rule (e.g., "38°C threshold").
+        # ── 3. Telemetry number grounding (formatting tolerance only) ─────────
         policy_values = TelemetryValidator._collect_policy_values(primary_sop, contributing_sops)
 
         def _is_policy_value(val: float) -> bool:
-            return any(abs(val - pv) <= 0.6 for pv in policy_values)
+            return any(abs(val - pv) < 0.05 or (val == round(val) and abs(val - pv) <= 0.5) for pv in policy_values)
 
         # 3a. Temperature — only check values cited in *current reading* context
         actual_temp = weather.get("temperature_2m")
@@ -150,17 +184,16 @@ class TelemetryValidator:
         valid_temps = [float(v) for v in [actual_temp, actual_app] if v is not None]
 
         cited_temps = TelemetryValidator._extract_with_patterns(
-            TelemetryValidator._current_temp_patterns if False else
             TelemetryValidator._CURRENT_TEMP_PATTERNS,
             response_text
         )
         for t in cited_temps:
             if _is_policy_value(t):
-                continue  # This is a policy threshold quote, not a telemetry claim
-            if valid_temps and not any(abs(t - vt) <= 1.5 for vt in valid_temps):
+                continue
+            if valid_temps and not any(TelemetryValidator._matches_formatting_tolerance(t, vt) for vt in valid_temps):
                 violations.append(
                     f"Telemetry mismatch — temperature cited: {t}°C "
-                    f"(verified: temp={actual_temp}°C, apparent={actual_app}°C, tolerance ±1.5°C)"
+                    f"(verified: temp={actual_temp}°C, apparent={actual_app}°C, formatting tolerance only)"
                 )
 
         # 3b. Wind speed — only check values in *current reading* context
@@ -174,10 +207,10 @@ class TelemetryValidator:
         for w in cited_winds:
             if _is_policy_value(w):
                 continue
-            if valid_winds and not any(abs(w - vw) <= 2.0 for vw in valid_winds):
+            if valid_winds and not any(TelemetryValidator._matches_formatting_tolerance(w, vw) for vw in valid_winds):
                 violations.append(
                     f"Telemetry mismatch — wind cited: {w} km/h "
-                    f"(verified: {actual_wind} km/h sustained, {actual_gusts} km/h gusts, tolerance ±2 km/h)"
+                    f"(verified: {actual_wind} km/h sustained, {actual_gusts} km/h gusts, formatting tolerance only)"
                 )
 
         # 3c. Precipitation — only check values in *current reading* context
@@ -190,10 +223,10 @@ class TelemetryValidator:
             for p in cited_precips:
                 if _is_policy_value(p):
                     continue
-                if not (abs(p - ap) <= 1.5):
+                if not TelemetryValidator._matches_formatting_tolerance(p, ap):
                     violations.append(
                         f"Telemetry mismatch — precipitation cited: {p} mm "
-                        f"(verified: {ap} mm, tolerance ±1.5 mm)"
+                        f"(verified: {ap} mm, formatting tolerance only)"
                     )
 
         return (len(violations) == 0), violations

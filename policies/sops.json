@@ -43,28 +43,6 @@
         "triggers": {
           "wind_gusts_kmh_gte": 55.0
         }
-      },
-      {
-        "name": "Cyclonic or monsoon depression system with rainfall or elevated wind",
-        "system_flags": [
-          "low_pressure",
-          "low pressure",
-          "depression",
-          "monsoon_depression",
-          "monsoon depression",
-          "cyclone",
-          "cyclonic",
-          "squall",
-          "squally",
-          "monsoon",
-          "imd_alert",
-          "imd alert"
-        ],
-        "clause_operator": "any",
-        "triggers": {
-          "precipitation_mm_gte": 5.0,
-          "wind_speed_kmh_gte": 35.0
-        }
       }
     ],
     "guidance": "A well-marked low-pressure weather system or intense squally wind pattern is active. Treat all outdoor activities as high severity. Suspend all non-essential outdoor travel and exercise immediately due to flash waterlogging, squalls, and flying debris hazard.",

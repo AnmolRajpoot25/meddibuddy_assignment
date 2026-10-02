@@ -43,15 +43,26 @@ def extract_intent_and_entities(state: AdvisoryState) -> Dict[str, Any]:
     user_input = state.get("current_input", "") or ""
     lower_input = user_input.lower()
 
-    # 1. Location Extraction
-    extracted_location = None
-    # Words that should never be treated as city names
+    # 1. Attempt Constrained Structured Semantic Intent Extraction via LLM
+    # The LLM extracts intent ONLY (activity, location, timeframe).
+    # It has zero policy access and never selects SOPs or safety advice.
+    semantic_entities = None
+    if llm_service:
+        try:
+            semantic_entities = llm_service.extract_semantic_intent(user_input)
+        except Exception as e:
+            logger.warning(f"Semantic intent extraction skipped: {e}")
+
+    extracted_location = semantic_entities.get("location") if semantic_entities else None
+    extracted_activity = semantic_entities.get("activity") if semantic_entities else None
+    extracted_timeframe = semantic_entities.get("timeframe") if semantic_entities else None
+
+    # 2. Location Resolution (semantic first, then robust parsing fallback)
     stopwords = {
         "the", "a", "an", "my", "work", "school", "park", "office", "home",
         "general", "some", "this", "today", "terms", "developer", "now",
         "outdoor", "open", "black", "road", "roads", "street", "streets", "fast",
         "around", "at", "pm", "am", "morning", "afternoon", "evening",
-        # Common English words after prepositions that are NOT locations
         "right", "here", "there", "it", "is", "be", "safe", "us", "me",
         "an", "any", "all", "both", "each", "few", "more", "most",
         "other", "such", "no", "not", "only", "own", "same",
@@ -59,90 +70,74 @@ def extract_intent_and_entities(state: AdvisoryState) -> Dict[str, Any]:
         "testing", "mode", "override", "system", "forget"
     }
 
-    # Strategy 1: Regex — preposition followed by optional article and a city-like word.
-    # We take the FIRST word only (no multi-word grab) to avoid "London Right" artifacts.
-    # Multi-word cities like "New York" are handled by COMMON_LOCATIONS fallback.
-    loc_pattern = r'\b(?:in|at|near|around)\s+(?:the\s+|a\s+|an\s+|city\s+of\s+)?([A-Za-z][a-z]+(?:\s+[A-Z][a-z]+)?)'
-    for match in re.finditer(loc_pattern, user_input, re.I):
-        cand = match.group(1).strip()
-        # Take only the first word if the second is a stopword or lowercase action word
-        cand_words = cand.split()
-        if len(cand_words) > 1:
-            if cand_words[-1].lower() in stopwords or cand_words[-1].islower():
+    if not extracted_location or extracted_location.lower() in stopwords:
+        # Fallback Strategy 1: Preposition regex
+        loc_pattern = r'\b(?:in|at|near|around)\s+(?:the\s+|a\s+|an\s+|city\s+of\s+)?([A-Za-z][a-z]+(?:\s+[A-Z][a-z]+)?)'
+        for match in re.finditer(loc_pattern, user_input, re.I):
+            cand = match.group(1).strip()
+            cand_words = cand.split()
+            if len(cand_words) > 1 and (cand_words[-1].lower() in stopwords or cand_words[-1].islower()):
                 cand = cand_words[0]
-        # Skip if the entire candidate or its first word is a stopword
-        if cand.lower() in stopwords or cand_words[0].lower() in stopwords:
-            continue
-        # Skip if less than 2 chars (articles, etc.)
-        if len(cand) < 2:
-            continue
-        extracted_location = cand.title()
+            if cand.lower() in stopwords or cand_words[0].lower() in stopwords or len(cand) < 2:
+                continue
+            extracted_location = cand.title()
+            break
 
-    # Strategy 2: COMMON_LOCATIONS direct keyword scan (catches "Paris", "Chicago", multi-word cities)
-    if not extracted_location:
-        for loc in COMMON_LOCATIONS:
-            if re.search(rf'\b{re.escape(loc)}\b', lower_input):
-                extracted_location = loc.title()
-                break
+        # Fallback Strategy 2: COMMON_LOCATIONS direct keyword scan
+        if not extracted_location:
+            for loc in COMMON_LOCATIONS:
+                if re.search(rf'\b{re.escape(loc)}\b', lower_input):
+                    extracted_location = loc.title()
+                    break
 
-    # Direct short location input (e.g. user typing "Mainpuri" or "Kanpur" standalone)
-    if not extracted_location:
-        cleaned_input = re.sub(r'^(?:it is|it\'s|its|city is|in\s+the|in|at|for|near)\s+', '', user_input.strip(), flags=re.I).strip('.?!, ')
-        words = cleaned_input.split()
-        is_short_location = (
-            1 <= len(words) <= 3 and
-            not any(w.lower() in ["is", "can", "should", "what", "how", "why", "who", "where", "today", "tomorrow", "tonight", "safe", "cycling", "running", "picnic", "drive", "travel", "yes", "no", "walking"] for w in words)
-        )
-        if is_short_location and cleaned_input.lower() not in stopwords:
-            extracted_location = cleaned_input.title()
+        # Fallback Strategy 3: Direct short input (e.g. standalone "Mainpuri")
+        if not extracted_location:
+            cleaned_input = re.sub(r'^(?:it is|it\'s|its|city is|in\s+the|in|at|for|near)\s+', '', user_input.strip(), flags=re.I).strip('.?!, ')
+            words = cleaned_input.split()
+            is_short_location = (
+                1 <= len(words) <= 3 and
+                not any(w.lower() in ["is", "can", "should", "what", "how", "why", "who", "where", "today", "tomorrow", "tonight", "safe", "cycling", "running", "picnic", "drive", "travel", "yes", "no", "walking"] for w in words)
+            )
+            if is_short_location and cleaned_input.lower() not in stopwords:
+                extracted_location = cleaned_input.title()
 
     is_new_location = bool(extracted_location)
     final_location = extracted_location or state.get("location_name")
 
-    # 2. Activity Extraction (Semantic paraphrases supported)
-    extracted_activity = None
-    activity_keywords = {
-        "cycling": [
-            "cycle", "cycling", "bike", "biking", "bicycle", "two-wheeler",
-            "two-wheeled", "pedal machine", "scooter", "motorcycle", "pedal"
-        ],
-        "running": [
-            "run", "running", "jog", "jogging", "cardio", "sprint", "workout"
-        ],
-        "picnic": [
-            "picnic", "park", "bbq", "barbecue", "outing", "hangout", "lawn party"
-        ],
-        "commute": [
-            "drive", "driving", "travel", "commute", "highway", "road trip", "car ride"
-        ],
-        "pet walking": [
-            "dog walk", "walk the dog", "dog", "puppy", "pup", "pet", "retriever",
-            "canine", "four-legged"
-        ],
-        "general outdoor": [
-            "outside", "outdoor", "walk", "walking", "stroll", "play"
-        ]
-    }
-
-    for act_name, kw_list in activity_keywords.items():
-        if any(re.search(rf'\b{re.escape(kw)}\b', lower_input) for kw in kw_list):
-            extracted_activity = act_name
-            break
+    # 3. Activity Resolution (semantic entity first)
+    if not extracted_activity:
+        # Fallback basic direct matching
+        for act in ["cycling", "running", "picnic", "pet walking", "commute", "walking", "general outdoor"]:
+            if re.search(rf'\b{re.escape(act)}\b', lower_input):
+                extracted_activity = act
+                break
+        if not extracted_activity:
+            if any(w in lower_input for w in ["bike", "cycle", "pedal"]):
+                extracted_activity = "cycling"
+            elif any(w in lower_input for w in ["jog", "run"]):
+                extracted_activity = "running"
+            elif any(w in lower_input for w in ["dog", "pup", "pet"]):
+                extracted_activity = "pet walking"
+            elif any(w in lower_input for w in ["picnic", "park", "outing"]):
+                extracted_activity = "picnic"
+            else:
+                extracted_activity = "general outdoor"
 
     final_activity = extracted_activity or state.get("activity") or "general outdoor"
 
-    # 3. Timeframe Extraction
-    extracted_timeframe = "current"
-    if "this evening" in lower_input or "tonight" in lower_input or "evening" in lower_input:
-        extracted_timeframe = "this evening"
-    elif "afternoon" in lower_input or "midday" in lower_input or "1:00 pm" in lower_input or "2 pm" in lower_input or "2:00 pm" in lower_input or "1 pm" in lower_input:
-        extracted_timeframe = "afternoon"
-    elif "tomorrow" in lower_input:
-        extracted_timeframe = "tomorrow"
-    elif "today" in lower_input:
-        extracted_timeframe = "today"
-    elif state.get("timeframe"):
-        extracted_timeframe = state.get("timeframe")
+    # 4. Timeframe Resolution
+    if not extracted_timeframe or extracted_timeframe == "none":
+        extracted_timeframe = "current"
+        if "this evening" in lower_input or "tonight" in lower_input or "evening" in lower_input:
+            extracted_timeframe = "this evening"
+        elif "afternoon" in lower_input or "midday" in lower_input or "1:00 pm" in lower_input or "2 pm" in lower_input or "2:00 pm" in lower_input or "1 pm" in lower_input:
+            extracted_timeframe = "afternoon"
+        elif "tomorrow" in lower_input:
+            extracted_timeframe = "tomorrow"
+        elif "today" in lower_input:
+            extracted_timeframe = "today"
+        elif state.get("timeframe"):
+            extracted_timeframe = state.get("timeframe")
 
     logger.info(f"Entities parsed: Location='{final_location}', Activity='{final_activity}', Timeframe='{extracted_timeframe}'")
 

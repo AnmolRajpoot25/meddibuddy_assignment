@@ -39,13 +39,15 @@ class LLMService:
             return
 
         try:
+            import httpx
+            http_client = httpx.Client(timeout=httpx.Timeout(connect=4.0, read=10.0, write=4.0, pool=4.0))
             self._client = ChatOpenAI(
                 model=self.default_model,
                 openai_api_key=self.api_key,
                 openai_api_base="https://openrouter.ai/api/v1",
                 temperature=0.0,  # Zero temperature for deterministic adherence to policies
                 max_retries=0,
-                request_timeout=10,
+                http_client=http_client,
                 default_headers={
                     "HTTP-Referer": "https://github.com/medibuddy-assignment/weather-bot",
                     "X-Title": "Weather Advisory Policy Bot",
@@ -54,6 +56,74 @@ class LLMService:
         except Exception as e:
             logger.error(f"Failed to initialize ChatOpenAI: {e}")
             self._client = None
+    def extract_semantic_intent(
+        self,
+        user_input: str,
+        conversation_context: str = ""
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Constrained structured semantic intent extraction.
+        Extracts only:
+          - activity (normalized canonical string, e.g. 'cycling', 'running', 'picnic', 'pet walking', 'commute', etc.)
+          - location (city/region name string or None)
+          - timeframe (e.g. 'today', 'afternoon', '1:00 pm', 'this evening', 'tomorrow', 'current', or None)
+
+        CRITICAL SAFETY CONSTRAINTS:
+        - The model ONLY extracts linguistic entities and activity intent.
+        - The model NEVER chooses safety policies, evaluates safety, or provides safety advice.
+        - SOP selection remains 100% deterministic inside SOPEngine.
+        """
+        if not self._client or not user_input or not user_input.strip():
+            return None
+
+        system_prompt = (
+            "You are a strict, constrained semantic intent and entity extraction parser for a weather advisory system.\n"
+            "Your ONLY role is to parse the user's message and return a JSON object with exactly three keys:\n"
+            "1. 'activity': The specific physical activity intended. Map paraphrased descriptions accurately to their canonical activity:\n"
+            "   - 'two-wheeled pedal machine' -> 'cycling'\n"
+            "   - 'four-legged golden retriever pup outside' -> 'pet walking'\n"
+            "   - 'bike ride' / 'bicycle' / 'cycle' -> 'cycling'\n"
+            "   - 'cardio' / 'run' / 'jog' -> 'running'\n"
+            "   - 'picnic' / 'bbq' / 'outing' -> 'picnic'\n"
+            "   - 'drive' / 'road trip' -> 'commute'\n"
+            "   - Unhandled activities (e.g. 'table tennis origami') should retain their specific name.\n"
+            "2. 'location': The geographical city or place name mentioned (e.g. 'Chicago', 'Dubai', 'Phoenix', 'Bhopal', 'London', 'Paris'), or null if none mentioned.\n"
+            "3. 'timeframe': Time window mentioned (e.g. 'today', 'afternoon', '1:00 pm', 'this evening', 'tomorrow', 'current'), or null if unspecified.\n\n"
+            "STRICT CONSTRAINTS:\n"
+            "- You extract ENTITIES ONLY.\n"
+            "- You MUST NOT evaluate weather, decide safety, or recommend safety policies.\n"
+            "- Return ONLY a JSON object: {\"activity\": \"...\", \"location\": \"...\", \"timeframe\": \"...\"}"
+        )
+
+        user_prompt = f"USER QUERY: {user_input}\n"
+        if conversation_context:
+            user_prompt += f"PRIOR CONVERSATION CONTEXT: {conversation_context}\n"
+
+        try:
+            import re
+            response = self._client.invoke([
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt)
+            ])
+            if response and response.content:
+                text = response.content.strip()
+                if "```" in text:
+                    text = re.sub(r'^```(?:json)?\s*', '', text, flags=re.MULTILINE)
+                    text = re.sub(r'```\s*$', '', text, flags=re.MULTILINE)
+                data = json.loads(text.strip())
+                if isinstance(data, dict):
+                    raw_act = data.get("activity")
+                    raw_loc = data.get("location")
+                    raw_tf = data.get("timeframe")
+                    return {
+                        "activity": str(raw_act).strip().lower() if raw_act else None,
+                        "location": str(raw_loc).strip() if raw_loc and str(raw_loc).lower() != "null" else None,
+                        "timeframe": str(raw_tf).strip().lower() if raw_tf and str(raw_tf).lower() != "null" else None,
+                    }
+        except Exception as e:
+            logger.warning(f"Semantic intent extraction via LLM failed or timed out: {e}")
+
+        return None
 
     def compose_sop_response(
         self,
@@ -135,41 +205,9 @@ class LLMService:
                             f"Using deterministic fallback. Violations: {violations}"
                         )
             except Exception as e:
-                logger.warning(f"Primary OpenRouter model call timed out or failed ({e}). Testing fallback model...")
-                # Attempt alternative free model
-                for alt_model in FREE_MODELS[1:3]:
-                    try:
-                        alt_client = ChatOpenAI(
-                            model=alt_model,
-                            openai_api_key=self.api_key,
-                            openai_api_base="https://openrouter.ai/api/v1",
-                            temperature=0.0,
-                            max_retries=0,
-                            request_timeout=6,
-                        )
-                        res = alt_client.invoke([
-                            SystemMessage(content=system_prompt),
-                            HumanMessage(content=user_content)
-                        ])
-                        if res and res.content:
-                            candidate = res.content.strip()
-                            passed, violations = TelemetryValidator.validate(
-                                response_text=candidate,
-                                weather=weather,
-                                primary_sop=primary_sop,
-                                contributing_sops=contributing_sops
-                            )
-                            if passed:
-                                return candidate
-                            else:
-                                logger.warning(
-                                    f"Fallback LLM response failed telemetry validation. "
-                                    f"Violations: {violations}"
-                                )
-                    except Exception:
-                        continue
+                logger.warning(f"OpenRouter model call failed or timed out ({e}). Engaging deterministic grounded response.")
 
-        # Deterministic Grounded Fallback Formatter (Guaranteed Zero-Hallucination)
+        # Deterministic Grounded Fallback Formatter (Guaranteed Policy Compliance)
         return self._deterministic_grounded_response(
             location_name=location_name,
             weather=weather,
