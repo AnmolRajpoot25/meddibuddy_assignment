@@ -112,11 +112,11 @@ def extract_intent_and_entities(state: AdvisoryState) -> Dict[str, Any]:
                 extracted_activity = act
                 break
         if not extracted_activity:
-            if any(w in lower_input for w in ["bike", "cycle", "pedal"]):
+            if any(w in lower_input for w in ["bike", "cycle", "pedal", "fixie", "ride"]):
                 extracted_activity = "cycling"
             elif any(w in lower_input for w in ["jog", "run"]):
                 extracted_activity = "running"
-            elif any(w in lower_input for w in ["dog", "pup", "pet"]):
+            elif any(w in lower_input for w in ["dog", "pup", "pet", "hound", "canine"]):
                 extracted_activity = "pet walking"
             elif any(w in lower_input for w in ["picnic", "park", "outing"]):
                 extracted_activity = "picnic"

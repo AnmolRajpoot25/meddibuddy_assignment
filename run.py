@@ -4,6 +4,11 @@ import argparse
 import uvicorn
 from dotenv import load_dotenv
 
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except Exception:
+    pass
+
 load_dotenv()
 
 def start_server():

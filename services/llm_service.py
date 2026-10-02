@@ -47,6 +47,7 @@ class LLMService:
                 openai_api_base="https://openrouter.ai/api/v1",
                 temperature=0.0,  # Zero temperature for deterministic adherence to policies
                 max_retries=0,
+                request_timeout=10.0,
                 http_client=http_client,
                 default_headers={
                     "HTTP-Referer": "https://github.com/medibuddy-assignment/weather-bot",
@@ -79,15 +80,8 @@ class LLMService:
         system_prompt = (
             "You are a strict, constrained semantic intent and entity extraction parser for a weather advisory system.\n"
             "Your ONLY role is to parse the user's message and return a JSON object with exactly three keys:\n"
-            "1. 'activity': The specific physical activity intended. Map paraphrased descriptions accurately to their canonical activity:\n"
-            "   - 'two-wheeled pedal machine' -> 'cycling'\n"
-            "   - 'four-legged golden retriever pup outside' -> 'pet walking'\n"
-            "   - 'bike ride' / 'bicycle' / 'cycle' -> 'cycling'\n"
-            "   - 'cardio' / 'run' / 'jog' -> 'running'\n"
-            "   - 'picnic' / 'bbq' / 'outing' -> 'picnic'\n"
-            "   - 'drive' / 'road trip' -> 'commute'\n"
-            "   - Unhandled activities (e.g. 'table tennis origami') should retain their specific name.\n"
-            "2. 'location': The geographical city or place name mentioned (e.g. 'Chicago', 'Dubai', 'Phoenix', 'Bhopal', 'London', 'Paris'), or null if none mentioned.\n"
+            "1. 'activity': The specific physical activity intended. Understand natural language paraphrases and map them accurately to the canonical outdoor activity (e.g. 'cycling', 'running', 'picnic', 'pet walking', 'commute', 'walking', 'general outdoor'). Unhandled or niche activities should retain their specific descriptive name (e.g. 'table tennis origami').\n"
+            "2. 'location': The geographical city or place name mentioned, or null if none mentioned.\n"
             "3. 'timeframe': Time window mentioned (e.g. 'today', 'afternoon', '1:00 pm', 'this evening', 'tomorrow', 'current'), or null if unspecified.\n\n"
             "STRICT CONSTRAINTS:\n"
             "- You extract ENTITIES ONLY.\n"
@@ -107,10 +101,9 @@ class LLMService:
             ])
             if response and response.content:
                 text = response.content.strip()
-                if "```" in text:
-                    text = re.sub(r'^```(?:json)?\s*', '', text, flags=re.MULTILINE)
-                    text = re.sub(r'```\s*$', '', text, flags=re.MULTILINE)
-                data = json.loads(text.strip())
+                match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+                json_str = match.group(0) if match else text
+                data = json.loads(json_str)
                 if isinstance(data, dict):
                     raw_act = data.get("activity")
                     raw_loc = data.get("location")

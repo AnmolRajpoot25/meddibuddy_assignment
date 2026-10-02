@@ -22,15 +22,15 @@ VALID_SOP_IDS: Set[str] = _load_valid_sop_ids()
 
 class TelemetryValidator:
     """
-    Zero-Hallucination Post-LLM Validator.
+    Deterministic Post-LLM Telemetry Validator.
 
     Checks three things on every LLM response:
     1. The mandated primary SOP ID is cited.
     2. No unauthorized / hallucinated SOP IDs appear (anything not in sops.json).
     3. Every weather metric cited in an *observed / current reading* context matches
-       the verified Open-Meteo telemetry (tolerance: ±1 °C temp, ±2 km/h wind,
-       ±1 mm precip). Policy-guidance threshold values (e.g. "38°C threshold")
-       are explicitly allowed and NOT treated as telemetry claims.
+       the verified Open-Meteo telemetry (exact value or integer rounding <= 0.5).
+       Policy-guidance threshold values (e.g. "38°C threshold") are explicitly
+       allowed and NOT treated as telemetry claims.
     """
 
     # Patterns that signal an *observed / current* weather figure
