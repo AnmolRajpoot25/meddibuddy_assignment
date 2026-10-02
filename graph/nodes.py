@@ -38,14 +38,20 @@ def extract_intent_and_entities(state: AdvisoryState) -> Dict[str, Any]:
     stopwords = {
         "the", "a", "an", "my", "work", "school", "park", "office", "home",
         "general", "some", "this", "today", "terms", "developer", "now",
-        "outdoor", "open", "black", "road", "roads", "street", "streets", "fast"
+        "outdoor", "open", "black", "road", "roads", "street", "streets", "fast",
+        "around", "at", "pm", "am", "morning", "afternoon", "evening"
     }
-    
-    # Preposition candidates: 'in <city>', 'at <city>', 'near <city>', 'around <city>'
-    matches = re.findall(r'\b(?:in|at|near|around)\s+([A-Za-z]+)', user_input)
-    valid_candidates = [m for m in matches if m.lower() not in stopwords]
-    if valid_candidates:
-        extracted_location = valid_candidates[-1].strip().title()
+
+    # Match preposition followed by optional article 'the/a/an/city of' and city name
+    # Handles "cycling in the mainpuri", "walking in the kanpur around 2 pm", "in new york"
+    loc_pattern = r'\b(?:in|at|near|around)\s+(?:the\s+|a\s+|an\s+|city\s+of\s+)?([A-Za-z]+(?:\s+[A-Za-z]+)?)'
+    for match in re.finditer(loc_pattern, user_input, re.I):
+        cand = match.group(1).strip()
+        cand_words = cand.split()
+        if len(cand_words) > 1 and cand_words[-1].lower() in stopwords:
+            cand = cand_words[0]
+        if cand.lower() not in stopwords:
+            extracted_location = cand.title()
 
     if not extracted_location:
         for loc in COMMON_LOCATIONS:
@@ -53,13 +59,13 @@ def extract_intent_and_entities(state: AdvisoryState) -> Dict[str, Any]:
                 extracted_location = loc.title()
                 break
 
-    # Direct short location input (e.g. user answering location prompt with "Mainpuri" or "New Delhi")
+    # Direct short location input (e.g. user typing "Mainpuri" or "Kanpur" standalone)
     if not extracted_location:
-        cleaned_input = re.sub(r'^(?:it is|it\'s|its|city is|in|at|for|near)\s+', '', user_input.strip(), flags=re.I).strip('.?!, ')
+        cleaned_input = re.sub(r'^(?:it is|it\'s|its|city is|in\s+the|in|at|for|near)\s+', '', user_input.strip(), flags=re.I).strip('.?!, ')
         words = cleaned_input.split()
         is_short_location = (
             1 <= len(words) <= 3 and
-            not any(w.lower() in ["is", "can", "should", "what", "how", "why", "who", "where", "today", "tomorrow", "tonight", "safe", "cycling", "running", "picnic", "drive", "travel", "yes", "no"] for w in words)
+            not any(w.lower() in ["is", "can", "should", "what", "how", "why", "who", "where", "today", "tomorrow", "tonight", "safe", "cycling", "running", "picnic", "drive", "travel", "yes", "no", "walking"] for w in words)
         )
         if is_short_location and cleaned_input.lower() not in stopwords:
             extracted_location = cleaned_input.title()
@@ -88,7 +94,7 @@ def extract_intent_and_entities(state: AdvisoryState) -> Dict[str, Any]:
             "canine", "four-legged"
         ],
         "general outdoor": [
-            "outside", "outdoor", "walk", "stroll", "play"
+            "outside", "outdoor", "walk", "walking", "stroll", "play"
         ]
     }
 
@@ -103,7 +109,7 @@ def extract_intent_and_entities(state: AdvisoryState) -> Dict[str, Any]:
     extracted_timeframe = "current"
     if "this evening" in lower_input or "tonight" in lower_input or "evening" in lower_input:
         extracted_timeframe = "this evening"
-    elif "afternoon" in lower_input or "midday" in lower_input or "1:00 pm" in lower_input:
+    elif "afternoon" in lower_input or "midday" in lower_input or "1:00 pm" in lower_input or "2 pm" in lower_input or "2:00 pm" in lower_input or "1 pm" in lower_input:
         extracted_timeframe = "afternoon"
     elif "tomorrow" in lower_input:
         extracted_timeframe = "tomorrow"
