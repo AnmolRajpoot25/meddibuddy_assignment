@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weather Advisory Support</title>
+  <meta name="description" content="Outdoor activity safety advisory system powered by LangGraph and live Open-Meteo weather data.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="layout">
+    <!-- Minimal Header -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo-title">Weather Advisory</span>
+        <span class="status-indicator">
+          <span class="status-dot"></span>
+          <span>Live data</span>
+        </span>
+      </div>
+      <div class="topbar-actions">
+        <button id="view-sops-btn" class="nav-link" type="button">Policies (<span id="sops-count-badge">12</span>)</button>
+        <button id="reset-session-btn" class="nav-link" type="button">New Thread</button>
+      </div>
+    </header>
+
+    <!-- Chat Flow -->
+    <main class="chat-workspace">
+      <div id="messages-list" class="messages-list">
+        <!-- Minimal Empty State -->
+        <div class="empty-state" id="empty-state">
+          <p class="empty-title">Safety advisory grounded in live weather and written operating procedures.</p>
+          <div class="suggestions">
+            <button class="suggestion-item" data-query="Is it safe to bike in Bhopal today given the monsoon season?">Cycling in Bhopal today</button>
+            <button class="suggestion-item" data-query="What about this evening instead?">What about this evening? (Memory)</button>
+            <button class="suggestion-item" data-query="Is this a good afternoon for an outdoor picnic in London?">Picnic in London (Fuzzy match)</button>
+            <button class="suggestion-item" data-query="Should I take my puppy for a walk on the black street asphalt in Phoenix?">Dog walk in Phoenix (Pavement risk)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Minimal Input Bar -->
+      <footer class="composer-area">
+        <form id="chat-form" class="composer-form">
+          <div class="composer-box">
+            <textarea
+              id="user-input"
+              rows="1"
+              placeholder="Ask about outdoor safety in any city..."
+              required
+            ></textarea>
+            <button type="submit" id="send-btn" class="btn-send" aria-label="Send message">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5"></line>
+                <polyline points="5 12 12 5 19 12"></polyline>
+              </svg>
+            </button>
+          </div>
+          <div class="composer-footer">
+            <label class="toggle-label">
+              <input type="checkbox" id="simulate-failure-checkbox">
+              <span>Simulate API outage</span>
+            </label>
+            <span class="session-label">Session: <code id="session-id-display">...</code></span>
+          </div>
+        </form>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Policies Inspection Modal -->
+  <div id="sop-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <h3>Standard Operating Procedures</h3>
+          <p class="modal-sub">Defined in <code>policies/sops.json</code></p>
+        </div>
+        <button id="close-modal-btn" class="modal-close" aria-label="Close modal">&times;</button>
+      </div>
+      <div id="modal-sops-list" class="modal-content">
+        <div class="loading-state">Loading policies...</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
