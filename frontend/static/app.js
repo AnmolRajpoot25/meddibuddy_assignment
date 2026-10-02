@@ -154,7 +154,7 @@ function appendAssistantResponse(data) {
   }
 
   let telemetryHtml = "";
-  if (weather) {
+  if (weather && respType !== "api_error" && respType !== "location_unresolved") {
     const loc = escapeHtml(data.location_name || "");
     telemetryHtml = `
       <div class="telemetry-summary">
@@ -220,6 +220,8 @@ function formatMarkdown(text) {
   let html = escapeHtml(text);
   // Bold
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  // Italic
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
   // Inline code
   html = html.replace(/`(.*?)`/g, '<code style="font-family: var(--font-mono); font-size: 0.82em; background: var(--bg-muted); padding: 1px 4px; border-radius: 3px;">$1</code>');
   // Lists

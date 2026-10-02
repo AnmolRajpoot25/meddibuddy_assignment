@@ -392,6 +392,11 @@ body {
   accent-color: var(--color-danger);
 }
 
+.toggle-label input:checked + span {
+  color: #f87171;
+  font-weight: 500;
+}
+
 .session-label code {
   font-family: var(--font-mono);
   color: var(--text-secondary);
