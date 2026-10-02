@@ -1,5 +1,4 @@
-from typing import Dict, Any, Optional
-from langchain_core.messages import HumanMessage, AIMessage
+from typing import Dict, Any
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -21,7 +20,10 @@ from graph.edges import (
 def build_advisory_graph():
     """
     Constructs the LangGraph state graph with authentic conditional branching,
-    safety fallbacks, and multi-turn state preservation.
+    safety fallbacks, and durable multi-turn state preservation via MemorySaver.
+
+    Message history is persisted via the add_messages reducer defined in
+    AdvisoryState — appended inside nodes, not after graph invocation.
     """
     builder = StateGraph(AdvisoryState)
 
@@ -65,7 +67,8 @@ def build_advisory_graph():
     builder.add_edge("handle_location_missing_fallback", END)
     builder.add_edge("handle_weather_error_fallback", END)
 
-    # Checkpointer for session-based conversational continuity
+    # MemorySaver checkpointer — messages accumulate via add_messages reducer
+    # across turns within the same thread_id session.
     memory = MemorySaver()
     graph = builder.compile(checkpointer=memory)
     return graph
@@ -79,11 +82,15 @@ def run_advisory_agent(
     simulate_weather_failure: bool = False
 ) -> Dict[str, Any]:
     """
-    Executes a turn of the Weather Advisory Bot within a conversational session thread.
-    Retains location, activity, and message history across turns within the same session.
+    Executes one turn of the Weather Advisory Bot within a conversational session thread.
+    Location, activity, timeframe, and full message history are persisted across turns
+    via LangGraph's MemorySaver checkpointer and the add_messages reducer in AdvisoryState.
     """
     config = {"configurable": {"thread_id": session_id}}
 
+    # Messages are appended inside nodes (extract_intent → HumanMessage,
+    # response terminal nodes → AIMessage), so the LangGraph checkpoint
+    # captures them. We do NOT mutate them after invoke().
     initial_payload = {
         "session_id": session_id,
         "current_input": user_input,
@@ -91,11 +98,4 @@ def run_advisory_agent(
     }
 
     result = graph_app.invoke(initial_payload, config=config)
-
-    # Update message history in state
-    messages = result.get("messages", []) or []
-    messages.append(HumanMessage(content=user_input))
-    messages.append(AIMessage(content=result.get("final_response", "")))
-    result["messages"] = messages
-
     return result

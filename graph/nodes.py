@@ -123,6 +123,8 @@ def extract_intent_and_entities(state: AdvisoryState) -> Dict[str, Any]:
     updates = {
         "activity": final_activity,
         "timeframe": extracted_timeframe,
+        # Append the human message here so LangGraph checkpoints it
+        "messages": [HumanMessage(content=user_input)],
     }
     if is_new_location:
         updates["location_name"] = final_location
@@ -264,6 +266,7 @@ def generate_sop_advisory(state: AdvisoryState) -> Dict[str, Any]:
     return {
         "final_response": response_text,
         "response_type": "sop_advisory",
+        "messages": [AIMessage(content=response_text)],
     }
 
 
@@ -292,7 +295,8 @@ def handle_no_guidance_fallback(state: AdvisoryState) -> Dict[str, Any]:
 
     return {
         "final_response": msg,
-        "response_type": "no_guidance"
+        "response_type": "no_guidance",
+        "messages": [AIMessage(content=msg)],
     }
 
 
@@ -308,7 +312,8 @@ def handle_location_missing_fallback(state: AdvisoryState) -> Dict[str, Any]:
     )
     return {
         "final_response": msg,
-        "response_type": "location_unresolved"
+        "response_type": "location_unresolved",
+        "messages": [AIMessage(content=msg)],
     }
 
 
@@ -328,5 +333,6 @@ def handle_weather_error_fallback(state: AdvisoryState) -> Dict[str, Any]:
     )
     return {
         "final_response": msg,
-        "response_type": "api_error"
+        "response_type": "api_error",
+        "messages": [AIMessage(content=msg)],
     }
