@@ -16,19 +16,57 @@
       "picnic",
       "sports"
     ],
-    "condition_type": "threshold_or_system",
-    "triggers": {
-      "precipitation_mm_gte": 15.0,
-      "precipitation_probability_gte": 80,
-      "wind_speed_kmh_gte": 45.0,
-      "wind_gusts_kmh_gte": 55.0,
-      "system_flags": [
-        "low_pressure",
-        "cyclonic_circulation",
-        "monsoon_depression",
-        "imd_alert"
-      ]
-    },
+    "condition_type": "composite",
+    "clause_operator": "any",
+    "clauses": [
+      {
+        "name": "Heavy precipitation threshold",
+        "triggers": {
+          "precipitation_mm_gte": 15.0
+        }
+      },
+      {
+        "name": "High precipitation probability with active rain",
+        "triggers": {
+          "precipitation_mm_gte": 5.0,
+          "precipitation_probability_gte": 80
+        }
+      },
+      {
+        "name": "Squally sustained wind threshold",
+        "triggers": {
+          "wind_speed_kmh_gte": 45.0
+        }
+      },
+      {
+        "name": "Violent wind gust threshold",
+        "triggers": {
+          "wind_gusts_kmh_gte": 55.0
+        }
+      },
+      {
+        "name": "Cyclonic or monsoon depression system with rainfall or elevated wind",
+        "system_flags": [
+          "low_pressure",
+          "low pressure",
+          "depression",
+          "monsoon_depression",
+          "monsoon depression",
+          "cyclone",
+          "cyclonic",
+          "squall",
+          "squally",
+          "monsoon",
+          "imd_alert",
+          "imd alert"
+        ],
+        "clause_operator": "any",
+        "triggers": {
+          "precipitation_mm_gte": 5.0,
+          "wind_speed_kmh_gte": 35.0
+        }
+      }
+    ],
     "guidance": "A well-marked low-pressure weather system or intense squally wind pattern is active. Treat all outdoor activities as high severity. Suspend all non-essential outdoor travel and exercise immediately due to flash waterlogging, squalls, and flying debris hazard.",
     "recommended_actions": [
       "Avoid all non-essential outdoor activities immediately.",
@@ -52,16 +90,28 @@
       "hiking",
       "cycling"
     ],
-    "condition_type": "numeric",
-    "triggers": {
-      "precipitation_mm_gte": 10.0,
-      "wind_gusts_kmh_gte": 45.0,
-      "weather_codes": [
-        95,
-        96,
-        99
-      ]
-    },
+    "condition_type": "composite",
+    "clause_operator": "any",
+    "clauses": [
+      {
+        "name": "WMO thunderstorm codes",
+        "triggers": {
+          "weather_codes": [
+            95,
+            96,
+            99
+          ]
+        }
+      },
+      {
+        "name": "Convective downpour with high gusts",
+        "condition_logic": "all",
+        "triggers": {
+          "precipitation_mm_gte": 10.0,
+          "wind_gusts_kmh_gte": 45.0
+        }
+      }
+    ],
     "guidance": "Active thunderstorm conditions detected with convective downpours. Lightning strikes, localized pooling, and violent gusts make outdoor exposure hazardous. Cease outdoor activities and seek fully enclosed shelter.",
     "recommended_actions": [
       "Immediately move indoors or into an enclosed metal vehicle.",
@@ -86,6 +136,7 @@
       "commute by bike"
     ],
     "condition_type": "numeric",
+    "condition_logic": "any",
     "triggers": {
       "wind_speed_kmh_gte": 40.0,
       "wind_gusts_kmh_gte": 50.0
@@ -160,15 +211,27 @@
     "severity": "WARNING",
     "severity_rank": 3,
     "applicable_activities": [
-      "park",
+      "park with kids",
       "playground",
-      "walking",
-      "outing",
-      "picnic",
+      "walking with kids",
+      "walking with elderly",
+      "kids outing",
+      "elderly outing",
       "kids",
       "children",
       "elderly",
-      "infants"
+      "infants",
+      "toddlers",
+      "seniors"
+    ],
+    "excluded_activities": [
+      "dog",
+      "dogs",
+      "pet",
+      "pets",
+      "puppy",
+      "canine",
+      "four-legged"
     ],
     "condition_type": "numeric",
     "triggers": {
@@ -219,10 +282,16 @@
     "applicable_activities": [
       "dog walking",
       "pet walk",
+      "pet walking",
       "dog",
+      "dogs",
       "pets",
+      "pet",
       "puppy",
-      "canine"
+      "pup",
+      "canine",
+      "four-legged",
+      "retriever"
     ],
     "condition_type": "numeric",
     "triggers": {
@@ -312,6 +381,7 @@
       "outdoor gathering"
     ],
     "condition_type": "fuzzy",
+    "condition_logic": "all",
     "triggers": {
       "temperature_c_min": 18.0,
       "temperature_c_max": 28.5,
@@ -343,6 +413,7 @@
       "leisure"
     ],
     "condition_type": "fuzzy",
+    "condition_logic": "all",
     "triggers": {
       "relative_humidity_gte": 85,
       "temperature_c_gte": 29.0,

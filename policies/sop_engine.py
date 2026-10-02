@@ -1,17 +1,50 @@
 import json
 import os
-from typing import List, Dict, Any, Optional
+import re
+from typing import List, Dict, Any, Optional, Tuple
 
 SOPS_FILE_PATH = os.path.join(os.path.dirname(__file__), "sops.json")
 
 class SOPEngine:
     """
-    Decoupled SOP Evaluation Engine.
-    Reads policy definitions from sops.json and evaluates them against
+    Decoupled SOP Policy Evaluation Engine.
+    Reads policy definitions from sops.json and evaluates them dynamically against
     live meteorological metrics and user intent.
     
     Zero code modification is required to add or update SOP rules.
+    Condition evaluations are 100% data-driven based on the JSON schemas.
     """
+    METRIC_ALIASES = {
+        "temperature": "temperature_2m",
+        "temperature_c": "temperature_2m",
+        "temperature_2m": "temperature_2m",
+        "temp": "temperature_2m",
+        "temp_c": "temperature_2m",
+        "apparent_temperature": "apparent_temperature",
+        "apparent_temperature_c": "apparent_temperature",
+        "apparent_temp": "apparent_temperature",
+        "relative_humidity": "relative_humidity_2m",
+        "relative_humidity_pct": "relative_humidity_2m",
+        "relative_humidity_2m": "relative_humidity_2m",
+        "humidity": "relative_humidity_2m",
+        "precipitation": "precipitation",
+        "precipitation_mm": "precipitation",
+        "rain": "rain",
+        "rain_mm": "rain",
+        "precipitation_probability": "precipitation_probability",
+        "precipitation_probability_pct": "precipitation_probability",
+        "precip_prob": "precipitation_probability",
+        "wind_speed": "wind_speed_10m",
+        "wind_speed_kmh": "wind_speed_10m",
+        "wind_speed_10m": "wind_speed_10m",
+        "wind_gusts": "wind_gusts_10m",
+        "wind_gusts_kmh": "wind_gusts_10m",
+        "wind_gusts_10m": "wind_gusts_10m",
+        "uv_index": "uv_index",
+        "uv": "uv_index",
+        "weather_code": "weather_code",
+    }
+
     def __init__(self, sops_path: Optional[str] = None):
         self.sops_path = sops_path or SOPS_FILE_PATH
         self._cached_mtime = 0
@@ -33,6 +66,151 @@ class SOPEngine:
     def get_all_sops(self) -> List[Dict[str, Any]]:
         return self._load_sops()
 
+    def _resolve_metric_value(self, metric_raw: str, weather: Dict[str, Any]) -> Tuple[Optional[float], str]:
+        """Maps user or schema metric names to exact telemetry values."""
+        clean_key = metric_raw.lower().strip()
+        standard_key = self.METRIC_ALIASES.get(clean_key, clean_key)
+        val = weather.get(standard_key)
+        if val is None:
+            # Fallback attempts for apparent temp or rain
+            if "apparent" in clean_key:
+                val = weather.get("temperature_2m")
+            elif "rain" in clean_key or "precip" in clean_key:
+                val = weather.get("precipitation", 0.0)
+            elif "gust" in clean_key:
+                val = weather.get("wind_speed_10m", 0.0)
+        
+        try:
+            return float(val) if val is not None else None, standard_key
+        except (ValueError, TypeError):
+            return None, standard_key
+
+    def _matches_activity(self, sop: Dict[str, Any], activity: str, query_text: str) -> Tuple[bool, int]:
+        """
+        Determines if an SOP applies to the requested activity or query.
+        Returns (is_match, specificity_score).
+        """
+        applicable = [t.lower().strip() for t in sop.get("applicable_activities", [])]
+        if "all" in applicable:
+            return True, 0
+
+        excluded = [e.lower().strip() for e in sop.get("excluded_activities", [])]
+        norm_act = (activity or "general").lower().strip()
+        norm_query = (query_text or "").lower().strip()
+
+        # Reject if any excluded activity keywords are present
+        for exc in excluded:
+            if re.search(rf'\b{re.escape(exc)}\b', norm_act) or re.search(rf'\b{re.escape(exc)}\b', norm_query):
+                return False, 0
+
+        match_count = 0
+        for tag in applicable:
+            # Word boundary matching prevents partial substring false matches
+            pattern = rf'\b{re.escape(tag)}\b'
+            if re.search(pattern, norm_act) or re.search(pattern, norm_query):
+                match_count += 1
+
+        return (match_count > 0), match_count
+
+    def _evaluate_single_trigger(
+        self,
+        trigger_key: str,
+        threshold: Any,
+        weather: Dict[str, Any]
+    ) -> Tuple[bool, Optional[str]]:
+        """Evaluates a single metric comparator rule against weather data."""
+        clean_key = trigger_key.lower().strip()
+
+        # Set membership (weather codes)
+        if clean_key in ["weather_codes", "weather_code_in", "codes"]:
+            current_code = int(weather.get("weather_code", 0))
+            if isinstance(threshold, list) and current_code in threshold:
+                return True, f"Weather code {current_code} in convective/storm codes {threshold}"
+            return False, None
+
+        # Operator extraction
+        op = None
+        metric_name = clean_key
+        for suffix, operator in [
+            ("_gte", ">="),
+            ("_lte", "<="),
+            ("_gt", ">"),
+            ("_lt", "<"),
+            ("_eq", "=="),
+            ("_min", ">="),
+            ("_max", "<="),
+        ]:
+            if clean_key.endswith(suffix):
+                op = operator
+                metric_name = clean_key[:-len(suffix)]
+                break
+
+        if not op:
+            return False, None
+
+        current_val, std_name = self._resolve_metric_value(metric_name, weather)
+        if current_val is None:
+            return False, None
+
+        target_thresh = float(threshold)
+        passed = False
+        if op == ">=":
+            passed = (current_val >= target_thresh)
+        elif op == "<=":
+            passed = (current_val <= target_thresh)
+        elif op == ">":
+            passed = (current_val > target_thresh)
+        elif op == "<":
+            passed = (current_val < target_thresh)
+        elif op == "==":
+            passed = (current_val == target_thresh)
+
+        if passed:
+            reason = f"{std_name} ({current_val}) {op} threshold ({target_thresh})"
+            return True, reason
+        return False, None
+
+    def _evaluate_clause(
+        self,
+        clause: Dict[str, Any],
+        weather: Dict[str, Any],
+        query_text: str
+    ) -> Tuple[bool, List[str]]:
+        """Evaluates an individual condition clause containing triggers and optional system flags."""
+        triggers = clause.get("triggers", {})
+        system_flags = clause.get("system_flags", [])
+        logic = clause.get("condition_logic", "all").lower()
+
+        reasons = []
+        clause_results = []
+
+        # System / context keywords
+        if system_flags:
+            norm_q = (query_text or "").lower()
+            flags_matched = [f for f in system_flags if f.lower() in norm_q]
+            if flags_matched:
+                clause_results.append(True)
+                reasons.append(f"Contextual system alert flags active: {', '.join(flags_matched)}")
+            else:
+                clause_results.append(False)
+
+        # Trigger metrics
+        for t_key, t_thresh in triggers.items():
+            pass_single, reason_str = self._evaluate_single_trigger(t_key, t_thresh, weather)
+            clause_results.append(pass_single)
+            if pass_single and reason_str:
+                reasons.append(reason_str)
+
+        if not clause_results:
+            return False, []
+
+        if logic == "any":
+            clause_passed = any(clause_results)
+        else:
+            clause_passed = all(clause_results)
+
+        return clause_passed, (reasons if clause_passed else [])
+
     def evaluate(
         self,
         weather: Dict[str, Any],
@@ -40,140 +218,50 @@ class SOPEngine:
         query_text: str = ""
     ) -> Dict[str, Any]:
         """
-        Evaluates active SOPs against current live weather metrics and user activity.
-        
-        Resolution Strategy:
-        1. Identifies all candidate SOPs whose applicable_activities match the user's intent.
-        2. Evaluates the conditions (threshold, composite fuzzy, or extreme weather system).
-        3. Sorts all passing SOPs by severity_rank descending (CRITICAL -> WARNING -> CAUTION -> ADVISORY).
-        4. Designates the top match as primary_sop, and secondary matches as contributing_sops.
+        Evaluates active SOPs dynamically against current live weather metrics and user activity.
+        100% data-driven condition logic without hardcoded SOP identifiers.
         """
         sops = self._load_sops()
         matched_sops = []
 
-        norm_activity = (activity or "general").lower().strip()
-        norm_query = (query_text or "").lower()
-
-        # Telemetry metrics from Open-Meteo
-        temp = float(weather.get("temperature_2m", 20.0))
-        apparent_temp = float(weather.get("apparent_temperature", temp))
-        humidity = float(weather.get("relative_humidity_2m", 50.0))
-        precip = float(weather.get("precipitation", 0.0))
-        rain = float(weather.get("rain", precip))
-        precip_prob = float(weather.get("precipitation_probability", 0.0))
-        wind_speed = float(weather.get("wind_speed_10m", 0.0))
-        wind_gusts = float(weather.get("wind_gusts_10m", wind_speed))
-        uv_index = float(weather.get("uv_index", 0.0))
-        weather_code = int(weather.get("weather_code", 0))
-
-        # Check cyclonic or low-pressure keywords in query or high monsoon indicators
-        # (e.g. sustained heavy rain > 15mm or probability > 80% + high gusts)
-        is_monsoon_low_pressure = (
-            precip >= 15.0 or 
-            (precip_prob >= 80 and precip >= 5.0) or
-            (wind_speed >= 45.0) or
-            (wind_gusts >= 55.0) or
-            any(k in norm_query for k in ["low pressure", "depression", "cyclonic", "monsoon", "imd", "bhopal", "squally"])
-            and (precip >= 5.0 or wind_speed >= 35.0)
-        )
-
         for sop in sops:
-            applies_to_activity = False
-            tags = [t.lower() for t in sop.get("applicable_activities", [])]
-            if "all" in tags:
-                applies_to_activity = True
-            elif any(t in norm_activity for t in tags) or any(t in norm_query for t in tags):
-                applies_to_activity = True
-
-            if not applies_to_activity:
+            applies, spec_score = self._matches_activity(sop, activity, query_text)
+            if not applies:
                 continue
 
-            triggers = sop.get("triggers", {})
-            condition_met = False
-            reasons = []
+            sop_passed = False
+            sop_reasons = []
 
-            # 1. Extreme system / SOP-001 check
-            if sop.get("id") == "SOP-001":
-                if is_monsoon_low_pressure or precip >= triggers.get("precipitation_mm_gte", 15.0) or wind_speed >= triggers.get("wind_speed_kmh_gte", 45.0):
-                    condition_met = True
-                    reasons.append(f"Monsoon low-pressure / heavy precipitation triggers met (Precip: {precip}mm, Wind: {wind_speed}km/h, Gusts: {wind_gusts}km/h).")
-
-            # 2. Thunderstorm check (SOP-002)
-            elif sop.get("id") == "SOP-002":
-                if (weather_code in triggers.get("weather_codes", [])) or (precip >= triggers.get("precipitation_mm_gte", 10.0) and wind_gusts >= triggers.get("wind_gusts_kmh_gte", 45.0)):
-                    condition_met = True
-                    reasons.append(f"Thunderstorm/convective criteria met (WMO Code: {weather_code}, Precip: {precip}mm, Gusts: {wind_gusts}km/h).")
-
-            # 3. Numeric threshold evaluations
-            elif sop.get("condition_type") == "numeric":
-                rule_pass = True
+            # 1. Multi-clause condition logic
+            clauses = sop.get("clauses")
+            if clauses and isinstance(clauses, list):
+                clause_op = sop.get("clause_operator", "any").lower()
+                evaluated_clauses = [
+                    self._evaluate_clause(c, weather, query_text)
+                    for c in clauses
+                ]
+                clause_statuses = [res[0] for res in evaluated_clauses]
                 
-                if "wind_speed_kmh_gte" in triggers and wind_speed < triggers["wind_speed_kmh_gte"]:
-                    rule_pass = False
-                elif "wind_speed_kmh_gte" in triggers:
-                    reasons.append(f"Wind speed {wind_speed} km/h >= {triggers['wind_speed_kmh_gte']} km/h")
+                if clause_op == "all":
+                    sop_passed = all(clause_statuses)
+                else:  # "any"
+                    sop_passed = any(clause_statuses)
 
-                if "wind_gusts_kmh_gte" in triggers and wind_gusts < triggers["wind_gusts_kmh_gte"]:
-                    rule_pass = False
+                if sop_passed:
+                    for passed, c_reasons in evaluated_clauses:
+                        if passed:
+                            sop_reasons.extend(c_reasons)
 
-                if "apparent_temperature_c_gte" in triggers and apparent_temp < triggers["apparent_temperature_c_gte"]:
-                    rule_pass = False
-                elif "apparent_temperature_c_gte" in triggers:
-                    reasons.append(f"Apparent temp {apparent_temp}°C >= {triggers['apparent_temperature_c_gte']}°C")
+            # 2. Direct top-level triggers
+            elif "triggers" in sop:
+                direct_clause = {
+                    "triggers": sop.get("triggers", {}),
+                    "system_flags": sop.get("system_flags", []),
+                    "condition_logic": sop.get("condition_logic", "all")
+                }
+                sop_passed, sop_reasons = self._evaluate_clause(direct_clause, weather, query_text)
 
-                if "apparent_temperature_c_lte" in triggers and apparent_temp > triggers["apparent_temperature_c_lte"]:
-                    rule_pass = False
-                elif "apparent_temperature_c_lte" in triggers:
-                    reasons.append(f"Apparent temp {apparent_temp}°C <= {triggers['apparent_temperature_c_lte']}°C")
-
-                if "temperature_c_gte" in triggers and temp < triggers["temperature_c_gte"]:
-                    rule_pass = False
-                elif "temperature_c_gte" in triggers:
-                    reasons.append(f"Temperature {temp}°C >= {triggers['temperature_c_gte']}°C")
-
-                if "uv_index_gte" in triggers and uv_index < triggers["uv_index_gte"]:
-                    rule_pass = False
-                elif "uv_index_gte" in triggers:
-                    reasons.append(f"UV index {uv_index} >= {triggers['uv_index_gte']}")
-
-                if "precipitation_probability_gte" in triggers and precip_prob < triggers["precipitation_probability_gte"]:
-                    rule_pass = False
-                elif "precipitation_probability_gte" in triggers:
-                    reasons.append(f"Precip probability {precip_prob}% >= {triggers['precipitation_probability_gte']}%")
-
-                if "precipitation_mm_gte" in triggers and precip < triggers["precipitation_mm_gte"]:
-                    rule_pass = False
-                elif "precipitation_mm_gte" in triggers:
-                    reasons.append(f"Precipitation {precip}mm >= {triggers['precipitation_mm_gte']}mm")
-
-                if "relative_humidity_gte" in triggers and humidity < triggers["relative_humidity_gte"]:
-                    rule_pass = False
-                elif "relative_humidity_gte" in triggers:
-                    reasons.append(f"Humidity {humidity}% >= {triggers['relative_humidity_gte']}%")
-
-                condition_met = rule_pass
-
-            # 4. Fuzzy evaluations (e.g. Picnic comfort SOP-011 or Muggy SOP-012)
-            elif sop.get("condition_type") == "fuzzy":
-                if sop.get("id") == "SOP-011":
-                    # Picnic ideal envelope:
-                    in_temp = (triggers.get("temperature_c_min", 18.0) <= temp <= triggers.get("temperature_c_max", 28.5))
-                    in_precip = (precip <= triggers.get("precipitation_mm_lte", 0.2) and precip_prob <= triggers.get("precipitation_probability_lte", 25))
-                    in_wind = (wind_speed <= triggers.get("wind_speed_kmh_lte", 22.0))
-                    in_uv = (uv_index <= triggers.get("uv_index_lte", 7.0))
-                    if in_temp and in_precip and in_wind and in_uv:
-                        condition_met = True
-                        reasons.append(f"Fuzzy picnic comfort met: Temp {temp}°C (optimal 18-28.5°C), zero rain, gentle wind {wind_speed}km/h, safe UV {uv_index}.")
-                elif sop.get("id") == "SOP-012":
-                    # Muggy discomfort
-                    is_humid = humidity >= triggers.get("relative_humidity_gte", 85)
-                    is_warm = temp >= triggers.get("temperature_c_gte", 29.0)
-                    is_dryish = precip <= triggers.get("precipitation_mm_lte", 2.0)
-                    if is_humid and is_warm and is_dryish:
-                        condition_met = True
-                        reasons.append(f"Fuzzy muggy discomfort met: High humidity ({humidity}%) with warm temp ({temp}°C).")
-
-            if condition_met and reasons:
+            if sop_passed and sop_reasons:
                 matched_sops.append({
                     "id": sop["id"],
                     "title": sop["title"],
@@ -183,11 +271,17 @@ class SOPEngine:
                     "guidance": sop["guidance"],
                     "recommended_actions": sop.get("recommended_actions", []),
                     "rationale": sop.get("rationale", ""),
-                    "trigger_reasons": reasons,
+                    "trigger_reasons": sop_reasons,
+                    "specificity_score": spec_score,
                 })
 
-        # Conflict Resolution: Rank by severity_rank descending
-        matched_sops.sort(key=lambda x: x["severity_rank"], reverse=True)
+        # Conflict Resolution:
+        # Sort primarily by severity_rank descending (CRITICAL -> WARNING -> CAUTION -> ADVISORY),
+        # secondarily by activity specificity score.
+        matched_sops.sort(
+            key=lambda x: (x["severity_rank"], x["specificity_score"]),
+            reverse=True
+        )
 
         if not matched_sops:
             return {
