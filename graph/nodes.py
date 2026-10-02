@@ -16,10 +16,20 @@ sop_engine = SOPEngine()
 
 # Common cities pattern recognizer for robust zero-dependency extraction
 COMMON_LOCATIONS = [
-    "bhopal", "mumbai", "delhi", "bangalore", "bengaluru", "chennai", "kolkata",
-    "hyderabad", "pune", "ahmedabad", "jaipur", "lucknow", "chandigarh", "goa",
-    "springfield", "london", "new york", "tokyo", "paris", "berlin", "san francisco",
-    "sydney", "singapore", "madhya pradesh", "tamil nadu", "indore", "patna"
+    # India
+    "bhopal", "mumbai", "delhi", "new delhi", "bangalore", "bengaluru", "chennai",
+    "kolkata", "hyderabad", "pune", "ahmedabad", "jaipur", "lucknow", "chandigarh",
+    "goa", "indore", "patna", "nagpur", "surat", "visakhapatnam", "agra", "nashik",
+    "varanasi", "kanpur", "mainpuri", "madhya pradesh", "tamil nadu",
+    # Global
+    "london", "new york", "tokyo", "paris", "berlin", "san francisco", "sydney",
+    "singapore", "chicago", "dubai", "phoenix", "los angeles", "seattle", "miami",
+    "toronto", "melbourne", "bangkok", "jakarta", "moscow", "istanbul", "cairo",
+    "johannesburg", "nairobi", "beijing", "shanghai", "seoul", "amsterdam",
+    "rome", "madrid", "barcelona", "lisbon", "vienna", "zurich", "brussels",
+    "stockholm", "oslo", "copenhagen", "dublin", "edinburgh", "manchester",
+    "houston", "dallas", "boston", "denver", "atlanta", "las vegas",
+    "springfield", "kuala lumpur", "hong kong", "taipei",
 ]
 
 def extract_intent_and_entities(state: AdvisoryState) -> Dict[str, Any]:
@@ -35,24 +45,40 @@ def extract_intent_and_entities(state: AdvisoryState) -> Dict[str, Any]:
 
     # 1. Location Extraction
     extracted_location = None
+    # Words that should never be treated as city names
     stopwords = {
         "the", "a", "an", "my", "work", "school", "park", "office", "home",
         "general", "some", "this", "today", "terms", "developer", "now",
         "outdoor", "open", "black", "road", "roads", "street", "streets", "fast",
-        "around", "at", "pm", "am", "morning", "afternoon", "evening"
+        "around", "at", "pm", "am", "morning", "afternoon", "evening",
+        # Common English words after prepositions that are NOT locations
+        "right", "here", "there", "it", "is", "be", "safe", "us", "me",
+        "an", "any", "all", "both", "each", "few", "more", "most",
+        "other", "such", "no", "not", "only", "own", "same",
+        "too", "very", "just", "our", "its", "if", "so", "as",
+        "testing", "mode", "override", "system", "forget"
     }
 
-    # Match preposition followed by optional article 'the/a/an/city of' and city name
-    # Handles "cycling in the mainpuri", "walking in the kanpur around 2 pm", "in new york"
-    loc_pattern = r'\b(?:in|at|near|around)\s+(?:the\s+|a\s+|an\s+|city\s+of\s+)?([A-Za-z]+(?:\s+[A-Za-z]+)?)'
+    # Strategy 1: Regex — preposition followed by optional article and a city-like word.
+    # We take the FIRST word only (no multi-word grab) to avoid "London Right" artifacts.
+    # Multi-word cities like "New York" are handled by COMMON_LOCATIONS fallback.
+    loc_pattern = r'\b(?:in|at|near|around)\s+(?:the\s+|a\s+|an\s+|city\s+of\s+)?([A-Za-z][a-z]+(?:\s+[A-Z][a-z]+)?)'
     for match in re.finditer(loc_pattern, user_input, re.I):
         cand = match.group(1).strip()
+        # Take only the first word if the second is a stopword or lowercase action word
         cand_words = cand.split()
-        if len(cand_words) > 1 and cand_words[-1].lower() in stopwords:
-            cand = cand_words[0]
-        if cand.lower() not in stopwords:
-            extracted_location = cand.title()
+        if len(cand_words) > 1:
+            if cand_words[-1].lower() in stopwords or cand_words[-1].islower():
+                cand = cand_words[0]
+        # Skip if the entire candidate or its first word is a stopword
+        if cand.lower() in stopwords or cand_words[0].lower() in stopwords:
+            continue
+        # Skip if less than 2 chars (articles, etc.)
+        if len(cand) < 2:
+            continue
+        extracted_location = cand.title()
 
+    # Strategy 2: COMMON_LOCATIONS direct keyword scan (catches "Paris", "Chicago", multi-word cities)
     if not extracted_location:
         for loc in COMMON_LOCATIONS:
             if re.search(rf'\b{re.escape(loc)}\b', lower_input):
