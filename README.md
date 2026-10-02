@@ -1,5 +1,6 @@
 # Weather-Advisory Support Bot (AegisWeather)
 
+> **Live Deployment:** [https://meddibuddy-assignment.onrender.com](https://meddibuddy-assignment.onrender.com)  
 > **A deterministic Weather Advisory Bot backed by a real LangGraph state graph and live Open-Meteo meteorological data. Strictly enforces human-governed Standard Operating Procedures (SOPs) with post-generation telemetry validation, constrained semantic intent extraction, and deterministic fallback boundaries.**
 
 ---
