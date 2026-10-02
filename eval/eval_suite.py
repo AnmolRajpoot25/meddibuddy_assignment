@@ -47,9 +47,11 @@ FIXTURE_SEVERE_MONSOON = {
 
 FIXTURE_HIGH_WIND_CYCLING = {
     # SOP-003 envelope: wind_speed ≥ 40 km/h (high-wind cycling hazard)
+    # Deliberately kept below SOP-001 thresholds (45 km/h sustained, 55 km/h gusts)
+    # so SOP-003 wins conflict resolution without SOP-001 interference.
     "temperature_2m": 18.0, "apparent_temperature": 16.0,
     "precipitation": 0.0,   "rain": 0.0, "precipitation_probability": 10.0,
-    "wind_speed_10m": 45.0, "wind_gusts_10m": 58.0,
+    "wind_speed_10m": 42.0, "wind_gusts_10m": 52.0,
     "uv_index": 3.0,        "relative_humidity_2m": 60.0,
     "weather_code": 2,      "time": "2024-01-01T14:00", "success": True
 }

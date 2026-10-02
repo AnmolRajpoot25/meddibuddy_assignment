@@ -44,8 +44,8 @@ class LLMService:
                 openai_api_key=self.api_key,
                 openai_api_base="https://openrouter.ai/api/v1",
                 temperature=0.0,  # Zero temperature for deterministic adherence to policies
-                max_retries=1,
-                timeout=10,
+                max_retries=0,
+                request_timeout=10,
                 default_headers={
                     "HTTP-Referer": "https://github.com/medibuddy-assignment/weather-bot",
                     "X-Title": "Weather Advisory Policy Bot",
@@ -145,7 +145,7 @@ class LLMService:
                             openai_api_base="https://openrouter.ai/api/v1",
                             temperature=0.0,
                             max_retries=0,
-                            timeout=8,
+                            request_timeout=6,
                         )
                         res = alt_client.invoke([
                             SystemMessage(content=system_prompt),
