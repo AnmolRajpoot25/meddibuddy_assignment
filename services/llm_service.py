@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
+from services.telemetry_validator import TelemetryValidator
 
 load_dotenv()
 
@@ -119,7 +120,20 @@ class LLMService:
                     HumanMessage(content=user_content)
                 ])
                 if response and response.content:
-                    return response.content.strip()
+                    candidate = response.content.strip()
+                    passed, violations = TelemetryValidator.validate(
+                        response_text=candidate,
+                        weather=weather,
+                        primary_sop=primary_sop,
+                        contributing_sops=contributing_sops
+                    )
+                    if passed:
+                        return candidate
+                    else:
+                        logger.warning(
+                            f"LLM response failed telemetry validation ({len(violations)} violations). "
+                            f"Using deterministic fallback. Violations: {violations}"
+                        )
             except Exception as e:
                 logger.warning(f"Primary OpenRouter model call timed out or failed ({e}). Testing fallback model...")
                 # Attempt alternative free model
@@ -138,7 +152,20 @@ class LLMService:
                             HumanMessage(content=user_content)
                         ])
                         if res and res.content:
-                            return res.content.strip()
+                            candidate = res.content.strip()
+                            passed, violations = TelemetryValidator.validate(
+                                response_text=candidate,
+                                weather=weather,
+                                primary_sop=primary_sop,
+                                contributing_sops=contributing_sops
+                            )
+                            if passed:
+                                return candidate
+                            else:
+                                logger.warning(
+                                    f"Fallback LLM response failed telemetry validation. "
+                                    f"Violations: {violations}"
+                                )
                     except Exception:
                         continue
 
