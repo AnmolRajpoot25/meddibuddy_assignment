@@ -205,3 +205,58 @@ python eval/eval_suite.py
 ```bash
 python run.py --cli
 ```
+
+---
+
+## 9. Deployment Options
+
+### Option A: Render / Railway (Recommended 1-Click Git Deployment)
+1. Push your repository to GitHub.
+2. Sign in to [Render](https://render.com) or [Railway](https://railway.app).
+3. Create a **New Web Service** and select your GitHub repository.
+4. Render automatically detects `render.yaml` or Python environment:
+   * **Build Command:** `pip install -r requirements.txt`
+   * **Start Command:** `uvicorn frontend.app:app --host 0.0.0.0 --port $PORT`
+5. Under **Environment Variables**, add:
+   * `OPENROUTER_API_KEY`: your OpenRouter API key (optional if using deterministic grounded fallback)
+   * `OPENROUTER_MODEL`: `nvidia/nemotron-3.5-lightning:free`
+6. Click **Deploy**. Your app will be live with public HTTPS!
+
+### Option B: Docker Container Deployment (Cloud Run / EC2 / DigitalOcean)
+1. **Build the Docker image:**
+   ```bash
+   docker build -t aegis-weather-bot .
+   ```
+2. **Run locally or in production:**
+   ```bash
+   docker run -d -p 8000:8000 \
+     -e OPENROUTER_API_KEY="sk-or-v1-..." \
+     -e OPENROUTER_MODEL="nvidia/nemotron-3.5-lightning:free" \
+     --name aegis-weather-app \
+     aegis-weather-bot
+   ```
+3. Access at `http://localhost:8000` (or your cloud server's public IP).
+
+### Option C: Ubuntu Linux VPS (systemd + Nginx Reverse Proxy)
+1. **Setup service:** Create `/etc/systemd/system/aegisweather.service`:
+   ```ini
+   [Unit]
+   Description=AegisWeather FastAPI Service
+   After=network.target
+
+   [Service]
+   User=ubuntu
+   WorkingDirectory=/var/www/meddibuddy_assignment
+   ExecStart=/var/www/meddibuddy_assignment/venv/bin/uvicorn frontend.app:app --host 127.0.0.1 --port 8000
+   Restart=always
+   EnvironmentFile=/var/www/meddibuddy_assignment/.env
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+2. **Enable & Start:**
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now aegisweather
+   ```
+3. **Nginx Reverse Proxy:** Route port 80/443 to `http://127.0.0.1:8000` with SSL via `certbot --nginx`.
